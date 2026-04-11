@@ -1,38 +1,72 @@
 
-# Reason Manager for Managers (RMM)
+# `why` — The Package Reason Manager
 
-Allows the user to manage their own reasons for package installing.
+**`why`** is a generic wrapper for any package manager (`pacman`, `npm`, `pip`, `cargo`, etc.). It prevents system bloat by forcing you to declare an intent for every package you install or remove.
 
-A problem i always dealt with while mantaining a Linux, or any Language in general (Python/Node) is installing a package for a use, using it (or sometimes not even using) and just forgetting why it's there, or that it is there at all.
+It turns your package history into a self-documenting git-journal, ensuring you never look at a package and think, *"What does this even do and why is it here?"*
 
-The main goal of the application is a simple nudge for the user, into making him declare why he would be installing something.
+## 1. The Core Philosophy
+The main goal is a **forced nudge**. The command will refuse to execute unless you provide a reason. It stores these reasons in a local database and tracks every change using an internal Git repository.
 
-The call will be structured as < Config > < install call > < stuff to install > < commit message >
+## 2. Command Structure
+The tool is designed to be flexible. It follows a standard pattern:
+`why <action> <command string> <packages> <reason>`
 
-$ RMM install "sudo pacman -S" "nvim tree git" "edit code more efficiently"
+### Install / Add (`install`, `-S`, `add`)
+```bash
+$ why install "sudo pacman -S" "nvim tree git" "Need a lighter dev environment for CS course"
+```
+* **What happens:** Executes the pacman command. If successful, it logs the reason to `.rmm.db`, appends to `install.bash`, and commits the change to the internal `.git` folder.
 
-The command will refuse to work unless all fields are filled.
+### Uninstall / Remove (`uninstall`, `-Rs`, `-R`, `remove`)
+```bash
+$ why uninstall "pip uninstall" "requests" "Finished the API scraping project"
+```
+* **What happens:** Removes the items and updates the reason in the DB by concatenating the removal reason with the install history.
 
-After the call, all it does is install the stuff you wanted, write your install historic as a install.bash and also as a .rmm.db.
+### Reason / Query (`reason`, `why`, `history`)
+```bash
+$ why reason nvim
+> nvim: [INSTALLED] Need a lighter dev environment for CS course <REMOVED> i quit my course :( <REINSTALLED> i love CS now
+```
+* **What happens:** Shows the full lifecycle of a package. Even if you are currently installing a package, `why` will show you its previous history so you know why you deleted it last time.
 
-You can then look the reasons up using:
+### Iterate / Audit (`iterate`, `audit`)
+Useful for bringing an existing system under the control of `why`.
+```bash
+$ why iterate "pacman -Qqe" "pacman"
+```
+* **What happens:** Runs the listing command, checks each package against the DB, and prompts you for a reason for any "unknown" packages found in that registry.
 
-$ RMM reason nvim tree git 
+---
 
-And it will display the reasons for installation and deinstallation for all items.
-It will say 'Reason for < stuff > unknown' if you ask for something you dont have in.
+## 3. Technical Implementation
+To keep `why` "solid" and portable, it relies on three pillars:
 
-You can also remove stuff using:
+* **Registry Awareness:** The database stores packages paired with their manager (e.g., `pacman|nvim` vs `npm|nvim`) to avoid collisions.
+* **Internal Git Audit:** The application folder contains a hidden `.git` directory. Every time you change your system, `why` makes an automatic commit with your reason as the message.
+* **The "Install Bash":** A flat file (`install.bash`) that records every successful installation command, allowing you to replicate your setup on a new machine easily.
 
-$ RMM uninstall "sudo pacman -Rs" "nvim tree git" "i quit my course :("
+## 4. Setup
+1. Clone the repository to a folder of your choice (e.g., `~/.config/why`).
+2. Link the executable to your path:
+   ```bash
+   ln -s ~/.config/why/why.sh ~/.local/bin/why
+   ```
+3. Initialize the repo:
+   ```bash
+   cd ~/.config/why && git init
+   ```
 
-And it will automatically remove all stuff cited from install.bash and add your reason concatenated with the previous reason on the db file.
-This is useful so, if you ever wonder why a thing is actually not there, you can 'RMM reason' the name and remember why.
+---
 
-Using 'RMM install/uninstall' will always also show the message for any package you already have, what makes all RMM commands comport like the 'reason' one. You will always be forced to see the reasons that the system knows about your stuff, even if youre reinstalling, even if youre removing. and you could see something like this eventually:
+## What makes it "Solid"?
 
-$ RMM install "sudo pacman -S" "nvim" "i cant bother to use vscode man"
-> Nvim: edit code more efficiently <REMOVED> i quit my course :( <REINSTALLED> i want to go back to my course now, i love CS <REMOVED> i am going to vscode
+| Feature | Benefit |
+| :--- | :--- |
+| **Command Agnostic** | Works with `pacman`, `yay`, `pip`, `npm`, `cargo`, `go`, etc. |
+| **Atomic Logging** | The reason is only saved if the installation command returns an exit code of `0`. |
+| **History Confrontation** | You are forced to see *why* you uninstalled something before you reinstall it. |
+| **Audit Trail** | Use `git log` inside the `why` directory to see a perfect timeline of your system's evolution. |
 
-The system will have its own folder, that must be linked on .local/bin to be able to be called. And it will also have a .git folder.
-As the system will commit itself with the < commit message > always, so you can keep track of it. And even push to github eventually if you want.
+---
