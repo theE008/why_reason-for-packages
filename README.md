@@ -1,7 +1,3 @@
-Here is a updated, polished README that reflects the new **Dual-Mode** logic (Global vs. Local) and the simplified configuration features.
-
----
-
 # `why` — The Package Reason Manager
 
 **`why`** is a context-aware wrapper for any package manager (`pacman`, `npm`, `cargo`, `pip`, etc.). It prevents system and project bloat by forcing you to declare an **intent** for every dependency change.
