@@ -1,62 +1,99 @@
-
-# `why` — The Package Reason Manager
-
-**`why`** is a generic wrapper for any package manager (`pacman`, `npm`, `pip`, `cargo`, etc.). It prevents system bloat by forcing you to declare an intent for every package you install or remove.
-
-It turns your package history into a self-documenting git-journal, ensuring you never look at a package and think, *"What does this even do and why is it here?"*
-
-## 1. The Core Philosophy
-The main goal is a **forced nudge**. The command will refuse to execute unless you provide a reason. It stores these reasons in a local database and tracks every change using an internal Git repository.
-
-## 2. Command Structure
-The tool is designed to be flexible. It follows a standard pattern:
-`why <action> <command string> <packages> <reason>`
-
-### Install / Add (`install`, `-S`, `add`)
-```bash
-$ why install "sudo pacman -S" "nvim tree git" "Need a lighter dev environment for CS course"
-```
-* **What happens:** Executes the pacman command. If successful, it logs the reason to `.rmm.db`, appends to `install.bash`, and commits the change to the internal `.git` folder.
-
-### Uninstall / Remove (`uninstall`, `-Rs`, `-R`, `remove`)
-```bash
-$ why uninstall "pip uninstall" "requests" "Finished the API scraping project"
-```
-* **What happens:** Removes the items and updates the reason in the DB by concatenating the removal reason with the install history.
-
-### Reason / Query (`reason`, `why`, `history`)
-```bash
-$ why reason nvim
-> nvim: [INSTALLED] Need a lighter dev environment for CS course <REMOVED> i quit my course :( <REINSTALLED> i love CS now
-```
-* **What happens:** Shows the full lifecycle of a package. Even if you are currently installing a package, `why` will show you its previous history so you know why you deleted it last time.
-
-### Iterate / Audit (`iterate`, `audit`)
-Useful for bringing an existing system under the control of `why`.
-```bash
-$ why iterate "pacman -Qqe" "pacman"
-```
-* **What happens:** Runs the listing command, checks each package against the DB, and prompts you for a reason for any "unknown" packages found in that registry.
+Here is a updated, polished README that reflects the new **Dual-Mode** logic (Global vs. Local) and the simplified configuration features.
 
 ---
 
-## 3. Technical Implementation
-To keep `why` "solid" and portable, it relies on three pillars:
+# `why` — The Package Reason Manager
 
-* **Registry Awareness:** The database stores packages paired with their manager (e.g., `pacman|nvim` vs `npm|nvim`) to avoid collisions.
-* **Internal Git Audit:** The application folder contains a hidden `.git` directory. Every time you change your system, `why` makes an automatic commit with your reason as the message.
-* **The "Install Bash":** A flat file (`install.bash`) that records every successful installation command, allowing you to replicate your setup on a new machine easily.
+**`why`** is a context-aware wrapper for any package manager (`pacman`, `npm`, `cargo`, `pip`, etc.). It prevents system and project bloat by forcing you to declare an **intent** for every dependency change.
 
-## 4. Setup
-1. Clone the repository to a folder of your choice (e.g., `~/.config/why`).
-2. Link the executable to your path:
-   ```bash
-   ln -s ~/.config/why/why.sh ~/.local/bin/why
-   ```
-3. Initialize the repo:
-   ```bash
-   cd ~/.config/why && git init
-   ```
+It turns your package history into a self-documenting journal. Whether you are managing your global Arch Linux packages or a specific Rust project, you’ll never have to ask, *"Why did I install this?"* ever again.
+
+---
+
+## 1. Core Logic: Dual-Mode Operation
+
+`why` intelligently detects your environment to keep concerns separated:
+
+### 🌍 Global Mode (System-wide)
+If you run `why` anywhere else, it logs to its own home directory (e.g., `~/.config/why`). It maintains a hidden `.git` folder here to provide an invisible, automatic audit trail of your system's evolution.
+
+### 📁 Local Mode (Project-specific)
+If the current directory contains a `reasons/` folder, `why` automatically switches to **Local Mode**. 
+* **Database:** Stored inside `./reasons/`.
+* **Git:** `why` stays quiet and does **not** auto-commit. It leaves the changes staged/unstaged so they can be part of your project's main git commits.
+* **Config:** Uses `./reasons/why.conf` to simplify commands.
+
+---
+
+## 2. Command Structure
+
+### Basic Usage
+`why <action> [command] <packages> <reason>`
+
+### Simplified Usage (with `why.conf`)
+If a `why.conf` exists in your project's `reasons/` folder, you can skip the command string:
+```bash
+$ why install "serde" "Need JSON parsing for the API"
+```
+
+---
+
+## 3. Key Actions
+
+### `install` / `add`
+Executes the installation. If (and only if) the command succeeds, it logs the reason.
+* **Manual:** `why install "sudo pacman -S" "gimp" "Need to edit thumbnails"`
+* **Config-based:** `why install "reqwest" "Async HTTP client"`
+
+### `uninstall` / `remove`
+Removes the package and logs the removal reason, appending it to the package's lifecycle history.
+```bash
+$ why remove "requests" "Switching to httpx for trio support"
+```
+
+### `reason` / `history`
+Shows the full "birth-to-death" timeline of a package.
+```bash
+$ why reason nvim
+> [2024-05-10] nvim: [INSTALLED] Trying out Neovim for coding
+> [2024-06-12] nvim: <REMOVED> Too much configuration overhead
+```
+
+### `iterate` / `audit`
+Used to bring an existing system under control. It loops through your installed packages and asks for reasons for anything not yet in the `why` database.
+```bash
+$ why iterate "cargo install --list" "cargo"
+```
+
+### `status`
+Check your current mode (Global vs Local) and see active configuration defaults.
+
+---
+
+## 4. Configuration (`why.conf`)
+To avoid typing the same package manager commands over and over, place a `why.conf` inside your `reasons/` folder:
+
+```ini
+install: cargo add
+remove: cargo rm
+iterate: cargo tree --depth 1
+```
+
+---
+
+## 5. Setup
+
+1.  **Clone & Link:**
+    ```bash
+    git clone git@github.com:theE008/why_reason-for-packages.git ~/.config/why
+    ln -s ~/.config/why/why.sh ~/.local/bin/why
+    ```
+2.  **Initialize Project (Optional):**
+    In any project where you want local tracking:
+    ```bash
+    mkdir reasons
+    touch reasons/why.conf
+    ```
 
 ---
 
@@ -64,9 +101,9 @@ To keep `why` "solid" and portable, it relies on three pillars:
 
 | Feature | Benefit |
 | :--- | :--- |
-| **Command Agnostic** | Works with `pacman`, `yay`, `pip`, `npm`, `cargo`, `go`, etc. |
-| **Atomic Logging** | The reason is only saved if the installation command returns an exit code of `0`. |
-| **History Confrontation** | You are forced to see *why* you uninstalled something before you reinstall it. |
-| **Audit Trail** | Use `git log` inside the `why` directory to see a perfect timeline of your system's evolution. |
+| **Command Agnostic** | Works with anything: `apt`, `npm`, `go`, `pip`, etc. |
+| **Atomic Logging** | Only logs if the command exit code is `0`. No junk logs for typos. |
+| **Context Aware** | Keeps system logs out of your projects and project logs out of your system. |
+| **Audit Trail** | In Global mode, use `git log` in the `why` dir to see a timeline of your life. |
 
 ---
